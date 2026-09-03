@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>核心指标趋势 - 7.1 冷启动 ~ 9.2 Ju流量导入</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 32px;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f6f7fb; color: #1f2937;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: .5px; }
+  .sub { color: #6b7280; font-size: 13px; margin-bottom: 20px; }
+  .stage-tag { display:inline-block; padding:3px 10px; border-radius: 12px; font-size: 12px; margin-right: 8px; }
+  .tag-cold { background:#e0f2fe; color:#0369a1; }
+  .tag-ju   { background:#fee2e2; color:#b91c1c; }
+
+  .kpi-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 28px;
+  }
+  .kpi {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px 16px;
+    box-shadow: 0 1px 2px rgba(16,24,40,.04);
+  }
+  .kpi .name { font-size: 12.5px; color: #6b7280; margin-bottom: 8px; }
+  .kpi .v-row { display: flex; align-items: baseline; justify-content: space-between; }
+  .kpi .v { font-size: 20px; font-weight: 700; color: #111827; }
+  .kpi .unit { font-size: 11px; color: #9ca3af; margin-left: 2px; }
+  .kpi .delta { font-size: 12px; color: #059669; font-weight: 600; }
+  .kpi .anchor-row {
+    margin-top: 8px; font-size: 11.5px; color: #6b7280;
+    display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center;
+  }
+  .kpi .c-cold { color: #0369a1; }
+  .kpi .c-ju   { color: #b91c1c; font-weight: 600; }
+  .kpi .divider { color: #d1d5db; }
+
+  .chart-card {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+    padding: 16px 18px 14px; margin-bottom: 20px;
+    box-shadow: 0 1px 2px rgba(16,24,40,.04);
+  }
+  .chart-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .chart-title { font-size: 15px; font-weight: 600; color: #111827; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 18px; font-size: 12px; color: #374151; }
+  .legend .sw { display:inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+  .stage-line { position: relative; height: 18px; margin: -4px 0 8px; }
+  .stage-line .line {
+    position: absolute; top: 8px; left: 0; right: 0; height: 1px; background: repeating-linear-gradient(90deg, #d1d5db 0 4px, transparent 4px 8px);
+  }
+  .stage-line .mark {
+    position: absolute; top: 2px; width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid #fff; box-shadow: 0 0 0 1px #6366f1; background:#6366f1;
+    transform: translateX(-50%);
+  }
+  .stage-line .label { position: absolute; top: 17px; transform: translateX(-50%); font-size: 11px; color:#6b7280; white-space: nowrap;}
+
+  canvas { width: 100%; height: 340px; display: block; }
+  .footnote { color:#9ca3af; font-size: 11.5px; margin-top: 16px; line-height: 1.7; }
+</style>
+</head>
+<body>
+
+<h1>核心指标趋势 · 7/1 冷启动（0 户）~ 9/2 Ju 流量导入（日均新增视角）</h1>
+<div class="sub">
+  <span class="stage-tag tag-cold">阶段一 · 7/1 – 7/30 冷启动：用户总数 0 → 50,000 户</span>
+  <span class="stage-tag tag-ju">阶段二 · 7/31 – 9/2 Ju 流量导入：用户总数 50,000 → 9,000,000 户</span>
+  图中数值 = 当日「日均新增」（DAU / 用户总数 / 平台用户资产为时点数）；允许「今日高、明日低」跌宕起伏；人数取整数，金额类保留 4 位小数。两阶段共用同一线性 Y 轴，冷启动量级较小，视觉上贴近横轴为真实比例（不刻意放大早期）。
+</div>
+
+<div class="kpi-grid" id="kpiGrid"></div>
+
+<div class="chart-card">
+  <div class="chart-head">
+    <div class="chart-title">用户类指标 · 日趋势（DAU / 注册用户 / 交易用户 / 用户总数）</div>
+    <div class="legend" id="legendUser"></div>
+  </div>
+  <div class="stage-line">
+    <div class="line"></div>
+    <div class="mark" id="mark1" style="left:0%"></div><div class="label" id="lbl1" style="left:0%"></div>
+    <div class="mark" id="mark2"></div><div class="label" id="lbl2"></div>
+    <div class="mark" id="mark3" style="left:100%"></div><div class="label" id="lbl3" style="left:100%"></div>
+  </div>
+  <canvas id="chartUser" height="340"></canvas>
+</div>
+
+<div class="chart-card">
+  <div class="chart-head">
+    <div class="chart-title">资金类指标 · 日趋势（交易量 / 总充值 / 提现 / 净流入 / 用户资产）</div>
+    <div class="legend" id="legendMoney"></div>
+  </div>
+  <div class="stage-line">
+    <div class="line"></div>
+    <div class="mark" style="left:0%"></div><div class="label" style="left:0%">07-01 冷启动</div>
+    <div class="mark" id="markM2"></div><div class="label" id="lblM2"></div>
+    <div class="mark" style="left:100%"></div><div class="label" style="left:100%">09-02 Ju导入后</div>
+  </div>
+  <canvas id="chartMoney" height="340"></canvas>
+</div>
+
+<div class="chart-card">
+  <div class="chart-head">
+    <div class="chart-title">日均手续费收入 · 日趋势（含累计收入副轴）</div>
+    <div class="legend" id="legendFee"></div>
+  </div>
+  <div class="stage-line">
+    <div class="line"></div>
+    <div class="mark" style="left:0%"></div><div class="label" style="left:0%">07-01</div>
+    <div class="mark" id="markF2"></div><div class="label" id="lblF2"></div>
+    <div class="mark" style="left:100%"></div><div class="label" style="left:100%">09-02</div>
+  </div>
+  <canvas id="chartFee" height="340"></canvas>
+</div>
+
+<div class="footnote">
+  · 数据口径（日均新增视角）：除「用户总数 / DAU / 平台用户资产」为当日时点数外，其余 7 项 = 当日实际发生的「日均新增量」，天然允许一天高一天低。<br>
+  · 分段锚点（严格 = 图中表格）：7/30 终点 → 用户总数=50,000 / DAU=4,000 / 平台用户资产=$25M / 日均交易量=$90M / 日均总充值=$8M / 日均提现=$7M / 日均净流入=$1M / 日均手续费=$45K；9/2 终点 → 用户总数=9,000,000 / DAU=450,000 / 资产=$1.20B / 交易量=$2.8B / 总充值=$180M / 提现=$150M / 净流入=$30M / 手续费=$1.26M。<br>
+  · 生成规则：① 先按阶段目标总量计算每日新增基线，再叠加 ±35% 随机高波动 + 邻日 10% 惯性回流 + 7 天周周期峰谷 → 保证跌宕感（今天新增高，明天可能新增低，典型如今天 100w 明天 50w）；② 人数类（用户总数、注册、交易用户、DAU）全部取整数，金额类（交易量、充值、提现、净流入、资产、手续费）统一保留 4 位小数；③ 7/1 用户总数=0、注册=0；④ 两阶段终点的 10 项锚点值都精确回归。<br>
+  · 坐标与比例：Y 轴使用标准线性刻度，两阶段（0 → 5w → 900w）共用同一比例，冷启动早期量级较小，视觉贴近横轴保留真实比例。
+</div>
+
+<script>
+/* ============== 锚点（严格 = 图中表格） ============== */
+const COLD_0730 = {
+  usersTotal: 50000, dau: 4000, reg: 50000, tradeUsers: 2800,
+  volume: 90e6, deposit: 8e6, withdraw: 7e6, netInflow: 1e6, asset: 25e6, fee: 45e3
+};
+const JU_0902 = {
+  usersTotal: 9e6, dau: 450e3, reg: 9e6, tradeUsers: 150e3,
+  volume: 2.8e9, deposit: 180e6, withdraw: 150e6, netInflow: 30e6, asset: 1.2e9, fee: 1.26e6
+};
+
+/* ============== 日期序列 7/1 ~ 9/2 ============== */
+function dateList(s, e){ const a=[]; const c=new Date(s); while(c<=e){a.push(new Date(c)); c.setDate(c.getDate()+1);} return a; }
+const dates = dateList(new Date(2025,6,1), new Date(2025,8,2));
+const N = dates.length; // 64
+const idx_0730 = 29; // 7/30 = 第30天 (0-based 29)
+const idx_0902 = N-1; // 63
+
+/* ============== 伪随机 & 基础工具 ============== */
+function seededRand(seed){ let s=seed; return function(){ s=(s*9301+49297)%233280; return s/233280; }; }
+const rand = seededRand(20260903);
+/* 高波动 + 7 天周周期 + 邻日惯性回流 → 生成每日增量（/ 倍数），保证跌宕起伏（今天高，明天可能低） */
+function dailyMultiplier(len, amp=0.35, auto=0.10, weekAmp=0.12, phase=0){
+  const out = new Array(len); let prev = 0;
+  for (let i=0;i<len;i++){
+    const weekTerm = Math.sin((i + phase) / 7 * Math.PI * 2) * weekAmp;      // 周峰谷
+    const white = (rand()*2-1) * amp;                                        // ±amp 随机跌宕
+    const smooth = prev * auto;                                              // 邻日 10% 惯性，避免每日独立乱跳
+    const mult = 1 + weekTerm + white + smooth;
+    out[i] = Math.max(0.15, mult);  // 避免极低值（但仍允许今天比昨天低很多）
+    prev = white + smooth;
+  }
+  return out;
+}
+
+/* ============== 阶段 1 (0~29 共30天) & 阶段 2 (30~63 共34天) 锚点精确对齐 ==============
+   做法：
+   1) 先对阶段生成「有跌宕感的日增序列」，求和得到阶段原始总量
+   2) 按「目标总量 / 原始总量」的比例，整体线性缩放每天，保证阶段终点 = 用户总数锚点 精确对齐
+   3) 对 DAU / 交易量 / 充值 / 提现 / 净流入 / 手续费：同样先按比例生成跌宕基线，
+      最后再按 该阶段终点的 (锚点 / 生成基线终点) 做阶段末整体缩放，保证 7/30 & 9/2 两日10项 = 图中锚点 完全一致
+*/
+function buildSeriesDaily(anchorStart, anchorMid, anchorEnd){
+  const L1 = idx_0730 + 1;            // 阶段1长度 30
+  const L2 = idx_0902 - idx_0730;    // 阶段2长度 34
+  const out = new Array(N);
+
+  /* ---- 用户总数：从日新增累计 ---- */
+  const m1 = dailyMultiplier(L1, 0.35, 0.10, 0.12, 0);
+  const regDailyAdd1 = m1.slice();                    // 阶段1每日新增（跌宕起伏，正）
+  const regRawSum1 = regDailyAdd1.reduce((a,b)=>a+b,0);
+  const regGoal1 = anchorMid.usersTotal - anchorStart.usersTotal; // 50000 - 0
+  const scale1 = regGoal1 / regRawSum1;
+  let cum = anchorStart.usersTotal;
+  const usersCum = new Array(N);
+  for (let i=0;i<L1;i++){
+    const addRaw = regDailyAdd1[i]*scale1;             // 缩放后阶段总增 = 50000 精确
+    cum += addRaw;
+    usersCum[i] = Math.max(0, Math.round(cum));        // 人数取整
+  }
+  const m2 = dailyMultiplier(L2, 0.40, 0.10, 0.14, 2); // 阶段2 振幅略大（Ju 流量有冲有回落：今天100w 明天50w 的感觉）
+  const regDailyAdd2 = m2.slice();
+  const regRawSum2 = regDailyAdd2.reduce((a,b)=>a+b,0);
+  const regGoal2 = anchorEnd.usersTotal - usersCum[idx_0730]; // 9,000,000 - 50,000
+  const scale2 = regGoal2 / regRawSum2;
+  for (let j=0;j<L2;j++){
+    const i = idx_0730 + 1 + j;
+    const addRaw = regDailyAdd2[j]*scale2;
+    cum += addRaw;
+    usersCum[i] = Math.max(0, Math.round(cum));
+  }
+  usersCum[idx_0730] = anchorMid.usersTotal;           // 7/30 精确锚点（整数 50000）
+  usersCum[idx_0902] = anchorEnd.usersTotal;           // 9/2  精确锚点（整数 9000000）
+  out.usersTotal = usersCum;
+
+  /* ---- 注册用户（= 用户总数累计同口径，保留） ---- */
+  out.reg = usersCum.slice();
+
+  /* ---- DAU：比例 × usersCum + 跌宕 ±30%，最后每阶段按锚点缩放终点 ---- */
+  let dauRaw = new Array(N);
+  for (let i=0;i<N;i++){
+    const ratio = i<L1 ? 0.08 : 0.05; // 冷启动 DAU 占比稍高 / Ju 导入巨量后占比回落
+    const base = usersCum[i] * ratio;
+    const wave = dailyMultiplier(1,0.30,0.10,0.18,i)[0];
+    dauRaw[i] = base * wave;
+  }
+  const dauS1 = anchorMid.dau / Math.max(1e-6, dauRaw[idx_0730]);
+  const dauS2 = anchorEnd.dau / Math.max(1e-6, dauRaw[idx_0902]);
+  const dau = dauRaw.map((v,i)=>{
+    let s;
+    if (i<=idx_0730){ const t=i/idx_0730; s=1*(1-t)+dauS1*t; }  // 阶段1：从 1× 线性过渡到 dauS1×（终点精确=anchorMid.dau）
+    else { const t=(i-idx_0730)/(idx_0902-idx_0730); s=dauS1*(1-t)+dauS2*t; }
+    return Math.max(1, Math.round(v * s));
+  });
+  dau[idx_0730]=anchorMid.dau; dau[idx_0902]=anchorEnd.dau;
+  out.dau = dau;
+
+  /* ---- 交易用户（每日有交易的独立户）：用户总数 × ~1.7% 基线 + ±40% 跌宕 ---- */
+  let tuRaw = new Array(N);
+  for (let i=0;i<N;i++){
+    const ratio = i<L1 ? 0.056 : 0.0167; // 5w 冷启动时 2800/50000≈5.6%；900w 时 15w/900w≈1.67%
+    tuRaw[i] = usersCum[i] * ratio * dailyMultiplier(1,0.40,0.10,0.15,i+1)[0];
+  }
+  const tuS1 = anchorMid.tradeUsers/Math.max(1e-6, tuRaw[idx_0730]);
+  const tuS2 = anchorEnd.tradeUsers/Math.max(1e-6, tuRaw[idx_0902]);
+  const tradeUsers = tuRaw.map((v,i)=>{
+    let s;
+    if (i<=idx_0730){ const t=i/idx_0730; s=1*(1-t)+tuS1*t; }
+    else { const t=(i-idx_0730)/(idx_0902-idx_0730); s=tuS1*(1-t)+tuS2*t; }
+    return Math.max(0, Math.round(v * s));
+  });
+  tradeUsers[idx_0730]=anchorMid.tradeUsers; tradeUsers[idx_0902]=anchorEnd.tradeUsers;
+  out.tradeUsers = tradeUsers;
+
+  /* ---- 金额类（交易量/充值/提现/净流入/资产/手续费）：4 位小数，按 usersCum 水平基线 + ±35% 跌宕 ----
+        先按 (usersCum / 阶段末usersCum) × 锚点 得到每日基线；
+        乘 dailyMultiplier(跌宕倍数)；
+        最后每阶段按 (锚点 / 该天基线值) 终点精确缩放。保证 7/30、9/2 完全匹配。
+  */
+  function moneySeries(keyMid, keyEnd, extraOptions={}){
+    const {depPair=false, assetCum=false, feeCumVol=false} = extraOptions;
+    const arr = new Array(N);
+    for (let i=0;i<N;i++){
+      let base;
+      if (i<=idx_0730){
+        const t=i/idx_0730;
+        base = keyMid * (usersCum[i] / Math.max(1, anchorMid.usersTotal)) * (0.6 + 0.4*t);
+      } else {
+        const t=(i-idx_0730)/(idx_0902-idx_0730);
+        const baseMid = keyMid;
+        const baseEnd = keyEnd;
+        base = (baseMid*(1-t) + baseEnd*t) * (usersCum[i]/(anchorMid.usersTotal*(1-t)+anchorEnd.usersTotal*t));
+        base = baseMid*(1-t) + baseEnd*t;   // 金额与用户规模线性强相关即可
+      }
+      if (feeCumVol) {
+        // 手续费 ≈ 交易量 × 5bp (0.0005) + ±40% 跌宕
+      }
+      const amp = assetCum? 0.05 : 0.35;
+      const wave = dailyMultiplier(1, amp, assetCum?0.60:0.10, assetCum?0.02:0.13, i+3)[0];
+      arr[i] = base * wave;
+    }
+    // 终点精确缩放（双阶段线性过渡 scale，避免单日突跳）
+    const r_mid = keyMid / Math.max(1e-9, arr[idx_0730]);
+    const r_end = keyEnd / Math.max(1e-9, arr[idx_0902]);
+    for (let i=0;i<N;i++){
+      let s;
+      if (i<=idx_0730){ const t=i/idx_0730; s=1*(1-t)+r_mid*t; }
+      else { const t=(i-idx_0730)/(idx_0902-idx_0730); s=r_mid*(1-t)+r_end*t; }
+      arr[i] *= s;
+    }
+    arr[idx_0730]=keyMid; arr[idx_0902]=keyEnd;   // 强制精确
+    if (depPair){
+      /* deposit/withdraw 对：保证净流入 (dep - wit) 与 netInflow 锚点成比例 */
+    }
+    // 金额 4 位小数
+    return arr.map(v => (Math.sign(v)*Math.round(Math.abs(v)*10000))/10000);
+  }
+
+  // 1. 交易量（volume）
+  out.volume = moneySeries(anchorMid.volume, anchorEnd.volume);
+  // 2. 总充值 + 提现 成对生成（dep > wit，net≈dep-wit 与 anchor 比例匹配）
+  let dep = moneySeries(anchorMid.deposit, anchorEnd.deposit);
+  let wit = moneySeries(anchorMid.withdraw, anchorEnd.withdraw);
+  // 校正：阶段终点 netInflow 必须精确（net = dep - wit）
+  function fixNet(dep, wit, targetMid, targetEnd){
+    for (let i=0;i<N;i++){
+      const cur = dep[i] - wit[i];
+      let tgt;
+      if (i<=idx_0730){ const t=i/idx_0730; tgt=(1-t)*(dep[0]-wit[0]) + t*targetMid; }
+      else { const tt=(i-idx_0730)/(idx_0902-idx_0730); tgt=targetMid*(1-tt)+targetEnd*tt; }
+      const delta = tgt - cur;
+      // 70% 调 deposit，30% 调 withdraw（净流入不足时多充少许 + 少提少许）
+      dep[i] = Math.round((dep[i] + delta*0.7)*10000)/10000;
+      wit[i] = Math.round((wit[i] - delta*0.3)*10000)/10000;
+    }
+    dep[idx_0730]=Math.round(anchorMid.deposit*10000)/10000;
+    wit[idx_0730]=Math.round(anchorMid.withdraw*10000)/10000;
+    dep[idx_0902]=Math.round(anchorEnd.deposit*10000)/10000;
+    wit[idx_0902]=Math.round(anchorEnd.withdraw*10000)/10000;
+  }
+  fixNet(dep, wit, anchorMid.netInflow, anchorEnd.netInflow);
+  out.deposit = dep; out.withdraw = wit;
+  // 3. 净流入 = deposit - withdraw（再次 4 位化，强制终点精确）
+  const net = dep.map((d,i)=>(Math.round((d - wit[i])*10000)/10000));
+  net[idx_0730]=Math.round(anchorMid.netInflow*10000)/10000;
+  net[idx_0902]=Math.round(anchorEnd.netInflow*10000)/10000;
+  out.netInflow = net;
+  // 4. 平台用户资产（时点累计：单调递增 + 终点精确）
+  let assetArr = new Array(N);
+  let assetCum = anchorMid.asset * 0.25; // 7/1 起步资产（7/1 users=0 → 资产 25M×25%≈6.25M，再往后逐步累计 netInflow）
+  for (let i=0;i<N;i++){
+    assetCum = Math.max(assetCum, assetCum + net[i] * 0.92);  // 每日净流入 92% 形成用户资产沉淀
+    assetArr[i] = assetCum;
+  }
+  const a_mid = anchorMid.asset / Math.max(1e-9, assetArr[idx_0730]);
+  const a_end = anchorEnd.asset / Math.max(1e-9, assetArr[idx_0902]);
+  for (let i=0;i<N;i++){
+    let s;
+    if (i<=idx_0730){ const t=i/idx_0730; s=1*(1-t)+a_mid*t; }
+    else { const tt=(i-idx_0730)/(idx_0902-idx_0730); s=a_mid*(1-tt)+a_end*tt; }
+    assetArr[i] *= s;
+  }
+  // 单调化（资产不回撤）+ 终点精确 + 4 位小数
+  let mAsset = assetArr[0];
+  assetArr = assetArr.map(v=>{ mAsset = Math.max(mAsset, v); return Math.round(mAsset*10000)/10000; });
+  assetArr[idx_0730]=Math.round(anchorMid.asset*10000)/10000;
+  assetArr[idx_0902]=Math.round(anchorEnd.asset*10000)/10000;
+  out.asset = assetArr;
+
+  // 5. 手续费：日均交易量 × 5bp 基线 + ±40% 跌宕；终点强制到锚点 45K / 1.26M
+  let feeArr = out.volume.map((vol,i)=> vol * 0.0005 * dailyMultiplier(1,0.40,0.10,0.15,i+4)[0]);
+  const f_mid = anchorMid.fee / Math.max(1e-9, feeArr[idx_0730]);
+  const f_end = anchorEnd.fee / Math.max(1e-9, feeArr[idx_0902]);
+  for (let i=0;i<N;i++){
+    let s;
+    if (i<=idx_0730){ const t=i/idx_0730; s=1*(1-t)+f_mid*t; }
+    else { const tt=(i-idx_0730)/(idx_0902-idx_0730); s=f_mid*(1-tt)+f_end*tt; }
+    feeArr[i] *= s;
+  }
+  feeArr[idx_0730]=Math.round(anchorMid.fee*10000)/10000;
+  feeArr[idx_0902]=Math.round(anchorEnd.fee*10000)/10000;
+  out.fee = feeArr.map(v=>Math.round(v*10000)/10000);
+
+  return out;
+}
+
+/* usersTotal 起点 7/1 = 0；其他起点为比例衍生 */
+const START = {
+  usersTotal: 0, dau: 0, reg: 0, tradeUsers: 0,
+  volume: 0, deposit: 0, withdraw: 0, netInflow: 0, asset: COLD_0730.asset * 0.2, fee: 0
+};
+const S = buildSeriesDaily(START, COLD_0730, JU_0902);
+// 手续费累计（副轴）
+let fc = 0; const feeCum = S.fee.map(v=>{ fc += v; return Math.round(fc*10000)/10000; });
+
+/* ============== 格式化工具 ============== */
+function fmtNum(v, d=0){
+  if (!isFinite(v)) return '0';
+  const av = Math.abs(v);
+  if (av>=1e9) return (v/1e9).toFixed(2)+'B';
+  if (av>=1e6) return (v/1e6).toFixed(2)+'M';
+  if (av>=1e3) return (v/1e3).toFixed(d)+'K';
+  return v.toFixed(d);
+}
+function fmt$(v){ if(!isFinite(v)) return '$0'; const a=Math.abs(v); if(a>=1e9) return '$'+(v/1e9).toFixed(2)+'B'; if(a>=1e6) return '$'+(v/1e6).toFixed(2)+'M'; return '$'+fmtNum(v); }
+function fmtInt(v){ return Math.round(v).toLocaleString('en-US'); }
+function fmtDate(d){ return (d.getMonth()+1).toString().padStart(2,'0')+'-'+d.getDate().toString().padStart(2,'0'); }
+function grow(a,b){ if(a===0) return '+∞'; return '+'+Math.round(((b-a)/a)*100)+'%'; }
+
+/* ============== KPI 卡（10 项，改名「日均新增」） ============== */
+const KPIS = [
+  { key:'usersTotal', name:'用户总数（时点）', unit:'户',
+    cold:COLD_0730.usersTotal, ju:JU_0902.usersTotal, fmt:fmtInt },
+  { key:'dau',        name:'DAU 日活（时点）', unit:'户',
+    cold:COLD_0730.dau, ju:JU_0902.dau, fmt:fmtInt },
+  { key:'reg',        name:'注册用户（累计=用户总数）', unit:'户',
+    cold:COLD_0730.reg, ju:JU_0902.reg, fmt:fmtInt },
+  { key:'tradeUsers', name:'日均新增 · 交易用户', unit:'户',
+    cold:COLD_0730.tradeUsers, ju:JU_0902.tradeUsers, fmt:fmtInt },
+  { key:'volume',     name:'日均新增 · 交易量', unit:'USD',
+    cold:COLD_0730.volume, ju:JU_0902.volume, fmt:fmt$ },
+  { key:'deposit',    name:'日均新增 · 总充值', unit:'USD',
+    cold:COLD_0730.deposit, ju:JU_0902.deposit, fmt:fmt$ },
+  { key:'withdraw',   name:'日均新增 · 总提现', unit:'USD',
+    cold:COLD_0730.withdraw, ju:JU_0902.withdraw, fmt:fmt$ },
+  { key:'netInflow',  name:'日均新增 · 净流入', unit:'USD',
+    cold:COLD_0730.netInflow, ju:JU_0902.netInflow, fmt:fmt$ },
+  { key:'asset',      name:'平台用户资产（时点）', unit:'USD',
+    cold:COLD_0730.asset, ju:JU_0902.asset, fmt:fmt$ },
+  { key:'fee',        name:'日均新增 · 手续费收入', unit:'USD',
+    cold:COLD_0730.fee, ju:JU_0902.fee, fmt:fmt$ },
+];
+const kpiGrid = document.getElementById('kpiGrid');
+KPIS.forEach(k=>{
+  const el = document.createElement('div'); el.className='kpi';
+  el.innerHTML = `
+    <div class="name">${k.name}</div>
+    <div class="v-row">
+      <div><span class="v">${k.fmt(k.ju)}</span><span class="unit">${k.unit}</span></div>
+      <span class="delta">${grow(k.cold,k.ju)}</span>
+    </div>
+    <div class="anchor-row">
+      <span class="c-cold">7/30 ${k.fmt(k.cold)}</span>
+      <span class="divider">—→</span>
+      <span class="c-ju">9/2 ${k.fmt(k.ju)}</span>
+    </div>`;
+  kpiGrid.appendChild(el);
+});
+
+/* ============== Canvas 折线图 ============== */
+function niceMaxLinear(max){
+  if (max<=0) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(max)));
+  const n = max / p;
+  const steps=[1,2,2.5,5,10]; for (const s of steps) if(n<=s) return s*p;
+  return 10*p;
+}
+function drawLineChart(canvas, seriesList, yLabelFmt, opts={}){
+  const ctx = canvas.getContext('2d');
+  const ratio = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || 1000, cssH = canvas.clientHeight || 340;
+  canvas.width = cssW*ratio; canvas.height = cssH*ratio;
+  ctx.setTransform(ratio,0,0,ratio,0,0);
+  const pad = { l: 68, r: opts.rightAxis ? 68 : 20, t: 12, b: 34 };
+  const W = cssW - pad.l - pad.r, H = cssH - pad.t - pad.b;
+  const N0 = seriesList[0].data.length;
+  const LOG = !!opts.logScale;
+
+  // ===== Y 轴 min/max（对数刻度：min 取所有序列中 >0 的最小值；线性：min=0） =====
+  function yBounds(filterRight){
+    let lo = Infinity, hi = -Infinity;
+    seriesList.forEach(s=>{
+      if (!!s.right !== !!filterRight) return;
+      s.data.forEach(v=>{ if (isFinite(v)) { if (v<lo) lo=v; if (v>hi) hi=v; }});
+    });
+    if (!isFinite(lo)) lo = 0;
+    if (!isFinite(hi)) hi = 1;
+    return {lo, hi};
+  }
+  const b1 = yBounds(false);
+  let yMin, yMax;
+  if (LOG){
+    yMin = Math.max(1, b1.lo>0 ? Math.pow(10, Math.floor(Math.log10(b1.lo))) : 1);     // 对数：min=10^floor(log10(最小正)), 至少=1 避免 log(0)
+    yMax = Math.max(yMin*10, Math.pow(10, Math.ceil(Math.log10(b1.hi || 10))));          // max=10^ceil(log10(max))
+  } else {
+    yMin = 0; yMax = niceMaxLinear(b1.hi * 1.1);
+  }
+  let y2Min, y2Max, y2Series = null;
+  if (opts.rightAxis){
+    y2Series = seriesList.find(s=>s.right);
+    if (y2Series){
+      const b2 = yBounds(true);
+      if (LOG){
+        y2Min = Math.max(1, b2.lo>0 ? Math.pow(10, Math.floor(Math.log10(b2.lo))) : 1);
+        y2Max = Math.max(y2Min*10, Math.pow(10, Math.ceil(Math.log10(b2.hi || 10))));
+      } else {
+        y2Min = 0; y2Max = niceMaxLinear(b2.hi * 1.12);
+      }
+    }
+  }
+
+  ctx.clearRect(0,0,cssW,cssH);
+  ctx.font = '11px -apple-system, "PingFang SC", sans-serif';
+  ctx.lineWidth = 1;
+
+  // ===== Y 网格 & 刻度 =====
+  const yTicks = LOG ? Math.max(4, Math.round(Math.log10(yMax/yMin))) : 5;
+  function labelAt(i, total, ymn, ymx, logMode){
+    if (logMode){
+      return ymn * Math.pow(10, i * Math.log10(ymx/ymn) / total);
+    }
+    return ymn + (ymx-ymn) * i/total;
+  }
+  function yPx(v, ymn, ymx, logMode){
+    if (v <= 0) return pad.t + H;
+    let t;
+    if (logMode) t = (Math.log10(v) - Math.log10(ymn)) / (Math.log10(ymx) - Math.log10(ymn));
+    else         t = (v - ymn) / (ymx - ymn);
+    t = Math.max(0, Math.min(1, t));
+    return pad.t + H * (1 - t);
+  }
+
+  for (let i=0;i<=yTicks;i++){
+    const v1 = labelAt(i, yTicks, yMin, yMax, LOG);
+    const y  = yPx(v1, yMin, yMax, LOG);
+    // 主网格
+    ctx.strokeStyle = i%2===0 || LOG? '#e5e7eb' : '#f3f4f6';
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l+W, y); ctx.stroke();
+    // 左轴标签
+    ctx.fillStyle = '#9ca3af'; ctx.textAlign='right'; ctx.textBaseline='middle';
+    ctx.fillText(yLabelFmt(v1, false), pad.l - 6, y);
+    // 右轴标签
+    if (opts.rightAxis && y2Series){
+      const v2 = labelAt(i, yTicks, y2Min, y2Max, LOG);
+      ctx.fillStyle = y2Series.color;
+      ctx.textAlign='left';
+      ctx.fillText(yLabelFmt(v2, true), pad.l + W + 6, yPx(v2, y2Min, y2Max, LOG));
+    }
+  }
+
+  // ===== 阶段分隔竖线：7/1 / 7/30 / 9/2 =====
+  const split = [0, idx_0730, N0-1];
+  split.forEach(i=>{
+    const x = pad.l + W * i/(N0-1);
+    ctx.save();
+    ctx.strokeStyle = i===0||i===N0-1 ? '#d1d5db' : '#6366f1';
+    ctx.setLineDash(i===0||i===N0-1?[]:[4,4]);
+    ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, pad.t+H); ctx.stroke();
+    ctx.restore();
+  });
+
+  // ===== X 轴刻度 =====
+  const stepX = Math.max(1, Math.floor(N0/7));
+  ctx.fillStyle = '#6b7280'; ctx.textAlign='center'; ctx.textBaseline='top';
+  for (let i=0;i<N0;i+=stepX){
+    const x = pad.l + W*i/(N0-1);
+    ctx.fillText(fmtDate(dates[i]), x, pad.t+H+8);
+  }
+  ctx.fillText(fmtDate(dates[N0-1]), pad.l+W, pad.t+H+8);
+
+  // ===== 折线 & 端点 & 终点标签 =====
+  seriesList.forEach(ser=>{
+    const color = ser.color;
+    const left = !ser.right;
+    const mn = left ? yMin : y2Min, mx = left? yMax : y2Max;
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = ser.width || 2;
+    ctx.beginPath();
+    for (let i=0;i<N0;i++){
+      let v = ser.data[i]; if (!isFinite(v)) v = mn;
+      const x = pad.l + W*i/(N0-1);
+      const y = yPx(v, mn, mx, LOG);
+      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    // 3 个端点圆点
+    split.forEach(i=>{
+      let v = ser.data[i]; if (!isFinite(v)) v = mn;
+      const x = pad.l + W*i/(N0-1);
+      const y = yPx(v, mn, mx, LOG);
+      ctx.beginPath(); ctx.arc(x,y,3.2,0,Math.PI*2); ctx.fill();
+    });
+    // 9/2 终点数值标签（左轴）
+    if (left){
+      const v = ser.data[N0-1]||mn;
+      const ex = pad.l+W, ey = yPx(v, mn, mx, LOG);
+      ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillStyle = color;
+      ctx.fillText(yLabelFmt(v,false), ex+4, ey-2);
+    }
+  });
+}
+
+/* ============== 图例 & 3 图绘制 ============== */
+const PAL_USER = [
+  { key:'dau',        name:'DAU 日活',       color:'#2563eb' },
+  { key:'reg',        name:'注册用户总数',   color:'#0ea5e9' },
+  { key:'tradeUsers', name:'日均新增·交易户',color:'#10b981' },
+  { key:'usersTotal', name:'用户总数',       color:'#8b5cf6' },
+];
+const PAL_MONEY = [
+  { key:'volume',    name:'日均新增·交易量',  color:'#f59e0b' },
+  { key:'deposit',   name:'日均新增·总充值',  color:'#ef4444' },
+  { key:'withdraw',  name:'日均新增·总提现',  color:'#f97316' },
+  { key:'netInflow', name:'日均新增·净流入',  color:'#14b8a6' },
+  { key:'asset',     name:'平台用户资产',     color:'#8b5cf6' },
+];
+function mountLegend(container, pal){
+  container.innerHTML = pal.map(p=>`<span><i class="sw" style="background:${p.color}"></i>${p.name}</span>`).join('');
+}
+mountLegend(document.getElementById('legendUser'),  PAL_USER);
+mountLegend(document.getElementById('legendMoney'), PAL_MONEY);
+mountLegend(document.getElementById('legendFee'), [
+  { color:'#dc2626', name:'日均新增·手续费（左轴 USD）' },
+  { color:'#2563eb', name:'手续费累计（右轴 USD）' },
+]);
+// 分隔 label
+const pct0730 = (idx_0730/(N-1))*100;
+['mark2','lbl2','markM2','lblM2','markF2','lblF2'].forEach(id=>{
+  const el = document.getElementById(id); if(!el) return;
+  if (id.startsWith('mark')) el.style.left = pct0730+'%';
+  else { el.style.left = pct0730+'%'; el.textContent = '07-30 冷启终点 5 万户'; }
+});
+document.getElementById('lbl1').textContent = '07-01 冷启（0 户）';
+document.getElementById('lbl3').textContent = '09-02 Ju 导入后 900 万户';
+
+function userFmt(v){
+  const a = Math.abs(v);
+  if (a>=1e6) return (v/1e6).toFixed(1)+'M';
+  if (a>=1e3) return (v/1e3).toFixed(0)+'K';
+  return Math.round(v).toString();
+}
+function moneyFmt(v){
+  const a = Math.abs(v);
+  if (a>=1e9) return '$'+(v/1e9).toFixed(2)+'B';
+  if (a>=1e6) return '$'+(v/1e6).toFixed(1)+'M';
+  if (a>=1e3) return '$'+(v/1e3).toFixed(0)+'K';
+  return '$'+Math.round(v);
+}
+
+function renderAll(){
+  drawLineChart(document.getElementById('chartUser'),
+    PAL_USER.map(p=>({...p, data: S[p.key], width: p.key==='usersTotal'?2.4:2})),
+    v=> userFmt(v));
+  drawLineChart(document.getElementById('chartMoney'),
+    PAL_MONEY.map(p=>({...p, data: S[p.key]})),
+    v=> moneyFmt(v));
+  drawLineChart(document.getElementById('chartFee'),
+    [
+      { color:'#dc2626', data: S.fee,   width: 2.4, name:'日均手续费' },
+      { color:'#2563eb', data: feeCum,  width: 1.9, name:'手续费累计', right:true }
+    ],
+    v=> moneyFmt(v), { rightAxis:true });
+}
+renderAll();
+window.addEventListener('resize', renderAll);
+</script>
+</body>
+</html>
